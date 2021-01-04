@@ -1,0 +1,68 @@
+```{r}
+# install.packages("dplyr")
+# install.packages("fs")
+# install.packages("devtools")
+# install.packages("RStoolbox")
+
+library(raster)
+library(dplyr)
+library(fs)
+library(devtools)
+library(RStoolbox)
+data.dir = 'D:/Master-2/Thesis/Planet/order_12_24_sr_2020-05-14_2'
+setwd(data.dir)
+
+file.names = list.files(data.dir,pattern="*.tif", full.names=TRUE)
+file.number = length(file.names)
+
+img_list=list()
+x_ctr=c()
+y_ctr=c()
+for (i in c(1:file.number)){
+  img_list[i]=brick(file.names[i])
+  x_ctr[i]=mean(img_list[[i]]@extent@xmin,img_list[[i]]@extent@xmax)
+  y_ctr[i]=mean(img_list[[i]]@extent@ymin,img_list[[i]]@extent@ymax)
+}
+
+getDist = function (x,y,roi.x,roi.y) {
+  dist=sqrt(((x-roi.x)**2)+((y-roi.y)**2))
+  return(dist)
+}
+
+
+img_idx=c(2:file.number)
+for (i in c(1:(file.number-1))){
+  if (i==1){
+    img_1=img_list[[1]]
+  }
+  x_ctr_new=mean(img_1@extent@xmin,img_1@extent@xmax)
+  y_ctr_new=mean(img_1@extent@ymin,img_1@extent@ymax)
+  mindist=Inf
+  for (j in img_idx){
+    tempdist=getDist(x_ctr_new,y_ctr_new,x_ctr[j],y_ctr[j])
+    if (tempdist<mindist){
+      mindist=tempdist
+      minidx=j
+    }
+  }
+  img_2=img_list[[minidx]]
+  inter_1=raster::intersect(img_1,img_2)
+  inter_2=raster::intersect(img_2,img_1)
+  mask_1=raster::mask(inter_1,inter_2)
+  mask_2=raster::mask(inter_2,inter_1)
+  
+  img_2_matched <- histMatch(mask_2, mask_1,returnFunctions = TRUE)
+  img_2[[1]]=calc(img_2[[1]],img_2_matched[[1]])
+  img_2[[2]]=calc(img_2[[2]],img_2_matched[[2]])
+  img_2[[3]]=calc(img_2[[3]],img_2_matched[[3]])
+  img_2[[4]]=calc(img_2[[4]],img_2_matched[[4]])
+  
+  img_1 <- mosaic(img_1, img_2, fun=max)
+  
+  img_idx=img_idx[img_idx!= minidx]
+}
+writeRaster(img_1, "img_1.tif",'GTiff',datatype='INT2U')
+
+
+```
+
